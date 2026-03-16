@@ -1,7 +1,7 @@
 {
   "name": "city-data-mcp",
-  "version": "0.1.0",
-  "description": "Multi-city public data MCP server - query and compare crime, 311, economic, and demographic data across US cities",
+  "version": "0.2.0",
+  "description": "MCP server for US civic data — demographics, economics, crime, employment across 30 cities. Includes peer city cohort builder.",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
@@ -10,7 +10,8 @@
   "scripts": {
     "build": "tsc",
     "dev": "tsc --watch",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "start:http": "node dist/index.js --http"
   },
   "keywords": [
     "mcp",
@@ -18,8 +19,12 @@
     "open-data",
     "city-data",
     "socrata",
+    "census",
+    "fred",
     "crime",
-    "government"
+    "government",
+    "civic-data",
+    "demographics"
   ],
   "author": "Noa Reikhav",
   "license": "MIT",
