@@ -15,6 +15,7 @@ import { queryCensus, type CensusResult } from "./census.js";
 import { queryFred, resolveFredCity, type FredCityResult } from "./fred.js";
 import { queryBls, resolveBlsCity, type BlsCityResult } from "./bls.js";
 import { queryFbiCrime, resolveFbiCity, type FbiCrimeResult } from "./fbi.js";
+import { queryTraffic, type TrafficResult } from "./traffic.js";
 
 // Cities where we have overlap across Census + FRED + BLS + FBI
 const FULL_POOL = [
@@ -55,46 +56,48 @@ interface FullCohortWeights {
   personalIncome: number;
   // Crime (FBI)
   crimeRate: number;
+  // Traffic (NHTSA FARS)
+  trafficFatalityRate: number;
   // Geography
   region: number;
 }
 
 const FULL_WEIGHT_PRESETS: Record<FullCohortCriteria, FullCohortWeights> = {
   balanced: {
-    population: 0.12, medianIncome: 0.10, povertyRate: 0.06, educationRate: 0.06,
-    medianHomeValue: 0.08, medianRent: 0.06, housingIndex: 0.06,
-    unemploymentRate: 0.10, employmentGrowth: 0.08, personalIncome: 0.08,
-    crimeRate: 0.10, region: 0.10,
+    population: 0.10, medianIncome: 0.09, povertyRate: 0.06, educationRate: 0.05,
+    medianHomeValue: 0.08, medianRent: 0.06, housingIndex: 0.05,
+    unemploymentRate: 0.09, employmentGrowth: 0.07, personalIncome: 0.07,
+    crimeRate: 0.09, trafficFatalityRate: 0.07, region: 0.12,
   },
   economics: {
-    population: 0.05, medianIncome: 0.15, povertyRate: 0.10, educationRate: 0.05,
+    population: 0.05, medianIncome: 0.14, povertyRate: 0.09, educationRate: 0.05,
     medianHomeValue: 0.05, medianRent: 0.05, housingIndex: 0.05,
-    unemploymentRate: 0.15, employmentGrowth: 0.15, personalIncome: 0.10,
-    crimeRate: 0.05, region: 0.05,
+    unemploymentRate: 0.14, employmentGrowth: 0.14, personalIncome: 0.10,
+    crimeRate: 0.05, trafficFatalityRate: 0.04, region: 0.05,
   },
   livability: {
-    population: 0.05, medianIncome: 0.10, povertyRate: 0.10, educationRate: 0.10,
-    medianHomeValue: 0.08, medianRent: 0.08, housingIndex: 0.04,
+    population: 0.05, medianIncome: 0.08, povertyRate: 0.09, educationRate: 0.09,
+    medianHomeValue: 0.07, medianRent: 0.07, housingIndex: 0.04,
     unemploymentRate: 0.05, employmentGrowth: 0.05, personalIncome: 0.05,
-    crimeRate: 0.20, region: 0.10,
+    crimeRate: 0.18, trafficFatalityRate: 0.08, region: 0.10,
   },
   safety: {
-    population: 0.05, medianIncome: 0.05, povertyRate: 0.10, educationRate: 0.05,
-    medianHomeValue: 0.05, medianRent: 0.05, housingIndex: 0.00,
-    unemploymentRate: 0.10, employmentGrowth: 0.05, personalIncome: 0.05,
-    crimeRate: 0.40, region: 0.05,
+    population: 0.05, medianIncome: 0.05, povertyRate: 0.08, educationRate: 0.04,
+    medianHomeValue: 0.04, medianRent: 0.04, housingIndex: 0.00,
+    unemploymentRate: 0.08, employmentGrowth: 0.04, personalIncome: 0.04,
+    crimeRate: 0.30, trafficFatalityRate: 0.19, region: 0.05,
   },
   growth: {
     population: 0.10, medianIncome: 0.05, povertyRate: 0.05, educationRate: 0.05,
     medianHomeValue: 0.05, medianRent: 0.05, housingIndex: 0.10,
-    unemploymentRate: 0.10, employmentGrowth: 0.20, personalIncome: 0.10,
-    crimeRate: 0.05, region: 0.10,
+    unemploymentRate: 0.10, employmentGrowth: 0.19, personalIncome: 0.09,
+    crimeRate: 0.04, trafficFatalityRate: 0.04, region: 0.09,
   },
   affordability: {
     population: 0.05, medianIncome: 0.10, povertyRate: 0.10, educationRate: 0.05,
     medianHomeValue: 0.20, medianRent: 0.20, housingIndex: 0.10,
     unemploymentRate: 0.05, employmentGrowth: 0.05, personalIncome: 0.05,
-    crimeRate: 0.00, region: 0.05,
+    crimeRate: 0.00, trafficFatalityRate: 0.00, region: 0.05,
   },
 };
 
@@ -120,6 +123,7 @@ interface CityFullData {
   fred: FredCityResult | null;
   bls: BlsCityResult | null;
   fbi: FbiCrimeResult | null;
+  traffic: TrafficResult | null;
 }
 
 interface FullCityScore {
@@ -136,13 +140,14 @@ interface FullCityScore {
  * Each source is independent — failures don't block others.
  */
 async function fetchCityFullData(cityName: string): Promise<CityFullData> {
-  const [census, fred, bls, fbi] = await Promise.allSettled([
+  const [census, fred, bls, fbi, traffic] = await Promise.allSettled([
     queryCensus(cityName),
     resolveFredCity(cityName) ? queryFred(cityName) : Promise.reject("no match"),
     resolveBlsCity(cityName) ? queryBls(cityName) : Promise.reject("no match"),
     resolveFbiCity(cityName)
       ? queryFbiCrime(resolveFbiCity(cityName)!.config.state, resolveFbiCity(cityName)!.key)
       : Promise.reject("no match"),
+    queryTraffic(cityName),
   ]);
 
   return {
@@ -151,6 +156,7 @@ async function fetchCityFullData(cityName: string): Promise<CityFullData> {
     fred: fred.status === "fulfilled" ? fred.value : null,
     bls: bls.status === "fulfilled" ? bls.value : null,
     fbi: fbi.status === "fulfilled" ? fbi.value : null,
+    traffic: traffic.status === "fulfilled" ? traffic.value : null,
   };
 }
 
@@ -168,6 +174,21 @@ function getCrimeRate(fbi: FbiCrimeResult | null): number | null {
   if (!violent || violent.years.length === 0) return null;
   const latest = violent.years[violent.years.length - 1];
   return latest.rate ?? latest.count; // prefer rate, fallback to count
+}
+
+// Helper to get traffic fatality rate per 100K from NHTSA data
+function getTrafficFatalityRate(traffic: TrafficResult | null): number | null {
+  if (!traffic) return null;
+  // Prefer county-level data, fall back to state
+  const years = traffic.county?.years ?? traffic.state?.years;
+  if (!years || years.length === 0) return null;
+  const latest = years[years.length - 1];
+  if (latest.fatalityRate != null) return latest.fatalityRate;
+  // Compute from population if available
+  if (traffic.population && latest.totalFatalities > 0) {
+    return (latest.totalFatalities / traffic.population) * 100_000;
+  }
+  return latest.totalFatalities; // raw count as last resort
 }
 
 /**
@@ -319,6 +340,19 @@ function computeFullSimilarity(
     totalScore += 0.5 * weights.crimeRate;
   }
 
+  // --- Traffic dimensions (NHTSA FARS) ---
+  if (target.traffic && candidate.traffic) {
+    dataSources.push("NHTSA");
+
+    const tFatality = getTrafficFatalityRate(target.traffic);
+    const cFatality = getTrafficFatalityRate(candidate.traffic);
+    const trafficScore = normalizedDiff(tFatality, cFatality);
+    totalScore += trafficScore * weights.trafficFatalityRate;
+    if (trafficScore < 0.12) reasons.push("similar traffic fatality rate");
+  } else {
+    totalScore += 0.5 * weights.trafficFatalityRate;
+  }
+
   // --- Region ---
   const targetRegion = STATE_REGIONS[tc.stateFips] || "unknown";
   const candidateRegion = STATE_REGIONS[cc.stateFips] || "unknown";
@@ -363,7 +397,7 @@ export function formatFullCohortResults(
 
   const lines: string[] = [
     `# Peer Cities for ${tc.city} — Full Analysis`,
-    `*Criteria: ${criteria} | ${poolSize} cities compared across Census + FRED + BLS + FBI*\n`,
+    `*Criteria: ${criteria} | ${poolSize} cities compared across Census + FRED + BLS + FBI + NHTSA*\n`,
   ];
 
   // Target summary
@@ -375,6 +409,10 @@ export function formatFullCohortResults(
   if (target.fbi) {
     const cr = getCrimeRate(target.fbi);
     if (cr != null) lines.push(`Violent Crime Rate: ${fmt(cr, "rate")} per 100K`);
+  }
+  if (target.traffic) {
+    const tr = getTrafficFatalityRate(target.traffic);
+    if (tr != null) lines.push(`Traffic Fatality Rate: ${fmt(tr, "rate")} per 100K`);
   }
   lines.push("");
 
@@ -401,6 +439,10 @@ export function formatFullCohortResults(
       const cr = getCrimeRate(c.data.fbi);
       if (cr != null) lines.push(`Violent Crime: ${fmt(cr, "rate")} per 100K`);
     }
+    if (c.data.traffic) {
+      const tr = getTrafficFatalityRate(c.data.traffic);
+      if (tr != null) lines.push(`Traffic Fatalities: ${fmt(tr, "rate")} per 100K`);
+    }
 
     if (c.reasons.length > 0) {
       lines.push(`*Match: ${c.reasons.join(", ")}*`);
@@ -424,6 +466,7 @@ export function formatFullCohortResults(
   lines.push(`| Rent | ${all.map(c => fmt(c.data.census?.housing.medianRent ?? null, "dollar")).join(" | ")} |`);
   lines.push(`| Unemployment | ${all.map(c => c.data.bls?.unemployment.current != null ? `${c.data.bls.unemployment.current.toFixed(1)}%` : "N/A").join(" | ")} |`);
   lines.push(`| Violent Crime | ${all.map(c => { const r = getCrimeRate(c.data.fbi); return r != null ? fmt(r, "rate") : "N/A"; }).join(" | ")} |`);
+  lines.push(`| Traffic Fatalities | ${all.map(c => { const r = getTrafficFatalityRate(c.data.traffic); return r != null ? fmt(r, "rate") : "N/A"; }).join(" | ")} |`);
 
   return lines.join("\n");
 }

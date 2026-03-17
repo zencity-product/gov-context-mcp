@@ -21,6 +21,7 @@ import { queryBls, resolveBlsCity, type BlsCityResult } from "./bls.js";
 import { queryFbiCrime, resolveFbiCity, type FbiCrimeResult } from "./fbi.js";
 import { queryPermits, type PermitResult } from "./permits.js";
 import { query311Trends, type Three11Result } from "./three11.js";
+import { queryTraffic, type TrafficResult } from "./traffic.js";
 
 // ---------------------------------------------------------------------------
 // Types
@@ -65,7 +66,7 @@ export async function trackCityChanges(city: string): Promise<ChangeTrackerResul
   const fbiResolved = resolveFbiCity(city);
 
   // Fire all fetches in parallel; each catches its own errors
-  const [fredResult, blsResult, fbiResult, permitResult, three11Result] =
+  const [fredResult, blsResult, fbiResult, permitResult, three11Result, trafficResult] =
     await Promise.all([
       fredResolved
         ? queryFred(fredResolved.key).catch((e) => {
@@ -91,6 +92,10 @@ export async function trackCityChanges(city: string): Promise<ChangeTrackerResul
       }),
       query311Trends(city, 180).catch((e) => {
         console.error(`[change-tracker] 311 error: ${(e as Error).message}`);
+        return null;
+      }),
+      queryTraffic(city).catch((e) => {
+        console.error(`[change-tracker] Traffic error: ${(e as Error).message}`);
         return null;
       }),
     ]);
@@ -120,6 +125,11 @@ export async function trackCityChanges(city: string): Promise<ChangeTrackerResul
   if (three11Result) {
     dataSources.push("311 / Socrata");
     extract311Metrics(three11Result, metrics);
+  }
+
+  if (trafficResult) {
+    dataSources.push("NHTSA FARS");
+    extractTrafficMetrics(trafficResult, metrics);
   }
 
   // --- Build summary ---
@@ -388,6 +398,67 @@ function extract311Metrics(data: Three11Result, out: ChangeMetric[]): void {
     direction,
     source: "311 / Socrata",
   });
+}
+
+// ---------------------------------------------------------------------------
+// Traffic extraction
+// ---------------------------------------------------------------------------
+
+function extractTrafficMetrics(traffic: TrafficResult, out: ChangeMetric[]): void {
+  const primary = traffic.county?.years ?? traffic.state.years;
+  if (primary.length < 2) return;
+
+  const sorted = [...primary].sort((a, b) => a.year - b.year); // oldest first
+  const first = sorted[0];
+  const last = sorted[sorted.length - 1];
+
+  if (first.totalFatalities === 0) return;
+
+  const pctChange = ((last.totalFatalities - first.totalFatalities) / first.totalFatalities) * 100;
+
+  // Fewer fatalities = improving (inverted, like crime)
+  let direction: Direction;
+  if (pctChange < -5) direction = "improving";
+  else if (pctChange > 5) direction = "declining";
+  else direction = "stable";
+
+  const rateStr = (y: typeof first) =>
+    y.fatalityRate != null
+      ? `${y.fatalityRate.toFixed(1)}/100K`
+      : `${y.totalFatalities.toLocaleString()} fatalities`;
+
+  out.push({
+    category: "Safety",
+    metric: "Traffic Fatalities",
+    current: `${rateStr(last)} (${last.year})`,
+    previous: `${rateStr(first)} (${first.year})`,
+    change: `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}% since ${first.year}`,
+    direction,
+    source: `NHTSA FARS (${traffic.dataLevel})`,
+  });
+
+  // Pedestrian trend if data available
+  if (first.pedestrianFatalities > 0 || last.pedestrianFatalities > 0) {
+    const pedFirst = first.pedestrianFatalities;
+    const pedLast = last.pedestrianFatalities;
+    if (pedFirst > 0) {
+      const pedChange = ((pedLast - pedFirst) / pedFirst) * 100;
+      let pedDir: Direction;
+      if (pedChange < -5) pedDir = "improving";
+      else if (pedChange > 5) pedDir = "declining";
+      else pedDir = "stable";
+
+      out.push({
+        category: "Safety",
+        metric: "Pedestrian Fatalities",
+        current: `${pedLast.toLocaleString()} (${last.year})`,
+        previous: `${pedFirst.toLocaleString()} (${first.year})`,
+        change: `${pedChange > 0 ? "+" : ""}${pedChange.toFixed(1)}% since ${first.year}`,
+        direction: pedDir,
+        source: `NHTSA FARS (${traffic.dataLevel})`,
+      });
+    }
+  }
 }
 
 // ---------------------------------------------------------------------------

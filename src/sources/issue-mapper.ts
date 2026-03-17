@@ -22,6 +22,7 @@ import { queryTransit, type TransitResult } from "./transit.js";
 import { querySchools, type SchoolResult } from "./schools.js";
 import { queryPermits, type PermitResult } from "./permits.js";
 import { queryBudget, type BudgetResult } from "./budget.js";
+import { queryTraffic, type TrafficResult } from "./traffic.js";
 
 // ── Result interfaces ───────────────────────────────────────────────────────
 
@@ -70,10 +71,25 @@ const ISSUE_MAP: Record<string, IssueConfig> = {
     budgetCategories: ["police", "safety", "fire"],
     three11Categories: ["noise", "assault", "gun", "weapon"],
   },
+  "traffic safety": {
+    label: "Traffic Safety",
+    description: "Traffic fatalities, pedestrian safety, drunk driving crashes, congestion",
+    sources: ["traffic", "census", "budget"],
+    censusFields: ["publicTransitRate", "driveAloneRate"],
+    budgetCategories: ["transportation", "streets", "traffic", "highway"],
+  },
+  "pedestrian safety": {
+    label: "Pedestrian & Cyclist Safety",
+    description: "Pedestrian fatalities, cyclist deaths, Vision Zero, walkability",
+    sources: ["traffic", "census", "budget", "311"],
+    censusFields: ["publicTransitRate", "driveAloneRate"],
+    budgetCategories: ["transportation", "streets"],
+    three11Categories: ["pothole", "street", "traffic", "sidewalk", "crosswalk", "signal"],
+  },
   "transportation": {
     label: "Transportation & Infrastructure",
-    description: "Transit ridership, commuting patterns, road conditions",
-    sources: ["transit", "census", "budget", "311"],
+    description: "Transit ridership, commuting patterns, road conditions, traffic safety",
+    sources: ["traffic", "transit", "census", "budget", "311"],
     censusFields: ["publicTransitRate", "meanCommuteTime", "driveAloneRate"],
     budgetCategories: ["transportation", "streets", "transit", "highway"],
     three11Categories: ["pothole", "street", "traffic", "sidewalk"],
@@ -686,6 +702,69 @@ function extractBudgetFindings(
   return findings;
 }
 
+function extractTrafficFindings(
+  result: TrafficResult,
+  _config: IssueConfig
+): IssueDataResult["findings"] {
+  const findings: IssueDataResult["findings"] = [];
+  const primary = result.county?.years ?? result.state.years;
+  const sorted = [...primary].sort((a, b) => b.year - a.year);
+
+  if (sorted.length > 0) {
+    const latest = sorted[0];
+    findings.push({
+      source: `NHTSA FARS (${result.dataLevel})`,
+      metric: "Traffic Fatalities",
+      value: `${latest.totalFatalities.toLocaleString()}${latest.fatalityRate != null ? ` (${latest.fatalityRate.toFixed(1)} per 100K)` : ""}`,
+      context: `${latest.year} — fatal crashes in ${result.dataLevel === "county" ? result.county!.countyName + " County" : result.stateName}`,
+    });
+
+    if (latest.pedestrianFatalities > 0) {
+      findings.push({
+        source: `NHTSA FARS (${result.dataLevel})`,
+        metric: "Pedestrian Fatalities",
+        value: latest.pedestrianFatalities.toLocaleString(),
+        context: `${latest.year} — crashes involving pedestrians`,
+      });
+    }
+
+    if (latest.alcoholRelated > 0) {
+      findings.push({
+        source: `NHTSA FARS (${result.dataLevel})`,
+        metric: "Alcohol-Related Crashes",
+        value: latest.alcoholRelated.toLocaleString(),
+        context: `${latest.year} — crashes where driver was intoxicated`,
+      });
+    }
+  }
+
+  if (result.congestion) {
+    findings.push({
+      source: "TTI Urban Mobility Report",
+      metric: "Annual Commuter Delay",
+      value: `${result.congestion.annualDelayHours} hours/commuter`,
+      context: `${result.congestion.dataYear} — costs $${result.congestion.congestionCost.toLocaleString()}/commuter annually`,
+    });
+  }
+
+  // Trend if multi-year
+  if (sorted.length >= 2) {
+    const oldest = sorted[sorted.length - 1];
+    const latest = sorted[0];
+    if (oldest.totalFatalities > 0) {
+      const pctChange = ((latest.totalFatalities - oldest.totalFatalities) / oldest.totalFatalities) * 100;
+      findings.push({
+        source: `NHTSA FARS (${result.dataLevel})`,
+        metric: "Fatality Trend",
+        value: `${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}% (${oldest.year}-${latest.year})`,
+        context: pctChange > 5 ? "Increasing fatalities — concerning trend" : pctChange < -5 ? "Declining fatalities — positive trend" : "Relatively stable",
+      });
+    }
+  }
+
+  return findings;
+}
+
 // ── Main query function ─────────────────────────────────────────────────────
 
 export async function mapIssueData(city: string, issue: string): Promise<IssueDataResult> {
@@ -899,6 +978,21 @@ export async function mapIssueData(city: string, issue: string): Promise<IssueDa
       } catch (e) {
         console.error(`[issue-mapper] Budget error: ${e}`);
         noData.push("budget");
+      }
+    })());
+  }
+
+  if (config.sources.includes("traffic")) {
+    tasks.push((async () => {
+      queried.push("traffic");
+      try {
+        const result = await queryTraffic(city);
+        const f = extractTrafficFindings(result, config);
+        if (f.length > 0) { findings.push(...f); hadData.push("traffic"); }
+        else { noData.push("traffic"); }
+      } catch (e) {
+        console.error(`[issue-mapper] Traffic error: ${e}`);
+        noData.push("traffic");
       }
     })());
   }

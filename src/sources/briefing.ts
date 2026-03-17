@@ -23,6 +23,7 @@ import { queryTransit, type TransitResult } from "./transit.js";
 import { querySchools, type SchoolResult } from "./schools.js";
 import { queryPermits, type PermitResult } from "./permits.js";
 import { queryBudget, type BudgetResult } from "./budget.js";
+import { queryTraffic, type TrafficResult } from "./traffic.js";
 
 // ── Interfaces ─────────────────────────────────────────────────────────────
 
@@ -55,6 +56,7 @@ interface SourceResults {
   schools: SchoolResult | null;
   permits: PermitResult | null;
   budget: BudgetResult | null;
+  traffic: TrafficResult | null;
 }
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -92,7 +94,7 @@ export async function buildCityBriefing(city: string): Promise<CityBriefing> {
     census, fred, bls, fbi,
     weather, airQuality, hud, water,
     civic, three11, transit, schools,
-    permits, budget,
+    permits, budget, traffic,
   ] = await Promise.all([
     // Demographics
     safeQuery(() => queryCensus(city)),
@@ -124,13 +126,15 @@ export async function buildCityBriefing(city: string): Promise<CityBriefing> {
     safeQuery(() => queryPermits(city)),
     // Budget
     safeQuery(() => Promise.resolve(queryBudget(city))),
+    // Traffic
+    safeQuery(() => queryTraffic(city)),
   ]);
 
   const sources: SourceResults = {
     census, fred, bls, fbi,
     weather, airQuality, hud, water,
     civic, three11, transit, schools,
-    permits, budget,
+    permits, budget, traffic,
   };
 
   // Track which sources succeeded
@@ -159,6 +163,7 @@ export async function buildCityBriefing(city: string): Promise<CityBriefing> {
   check("NCES (schools)", sources.schools);
   check("Census BPS (permits)", sources.permits);
   check("Municipal Budget", sources.budget);
+  check("NHTSA FARS (traffic)", sources.traffic);
 
   // Determine city display name
   const cityName = sources.census?.city ?? city;
@@ -414,10 +419,38 @@ function buildSafety(s: SourceResults): CityBriefing["sections"][0] {
     }
   }
 
+  // Traffic safety
+  if (s.traffic) {
+    if (lines.length > 0) lines.push("");
+    lines.push("**Traffic Safety (NHTSA FARS):**");
+    const primary = s.traffic.county?.years ?? s.traffic.state.years;
+    const sorted = [...primary].sort((a, b) => b.year - a.year);
+    if (sorted.length > 0) {
+      const latest = sorted[0];
+      lines.push(`- **Fatal Crashes:** ${latest.totalCrashes.toLocaleString()} (${latest.year})`);
+      lines.push(`- **Fatalities:** ${latest.totalFatalities.toLocaleString()}${latest.fatalityRate != null ? ` (${latest.fatalityRate.toFixed(1)} per 100K)` : ""}`);
+      lines.push(`- Pedestrian: ${latest.pedestrianFatalities.toLocaleString()} · Cyclist: ${latest.cyclistFatalities.toLocaleString()} · Alcohol-Related: ${latest.alcoholRelated.toLocaleString()}`);
+
+      // Trend if multi-year
+      if (sorted.length >= 2) {
+        const oldest = sorted[sorted.length - 1];
+        if (oldest.totalFatalities > 0) {
+          const pctChange = ((latest.totalFatalities - oldest.totalFatalities) / oldest.totalFatalities) * 100;
+          const arrow = pctChange < -1 ? "↓" : pctChange > 1 ? "↑" : "→";
+          lines.push(`- Trend: ${arrow} ${pctChange > 0 ? "+" : ""}${pctChange.toFixed(1)}% (${oldest.year}→${latest.year})`);
+        }
+      }
+    }
+    if (s.traffic.congestion) {
+      lines.push(`- **Congestion:** ${s.traffic.congestion.annualDelayHours} hrs/commuter · $${s.traffic.congestion.congestionCost.toLocaleString()}/commuter (TTI ${s.traffic.congestion.dataYear})`);
+    }
+    lines.push(`*${s.traffic.dataLevel === "county" ? "County" : "State"}-level data*`);
+  }
+
   return {
     title: "Safety",
     content: lines.join("\n"),
-    source: s.fbi ? "FBI UCR" : "N/A",
+    source: [s.fbi ? "FBI UCR" : null, s.traffic ? "NHTSA FARS" : null].filter(Boolean).join(", ") || "N/A",
   };
 }
 
