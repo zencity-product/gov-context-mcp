@@ -18,6 +18,8 @@
  * Docs: https://waterservices.usgs.gov/
  */
 
+import { resolveCity as geoResolve } from "./geo-resolver.js";
+
 const BASE_URL = "https://waterservices.usgs.gov/nwis/iv";
 
 // State codes for city lookups
@@ -144,9 +146,20 @@ const PARAM_NAMES: Record<string, string> = {
  * Uses a bounding box around the city coordinates.
  */
 export async function queryWater(city: string): Promise<WaterResult> {
-  const match = resolveCity(city);
+  let match = resolveCity(city);
+
+  // Fallback: try geo-resolver for any US city
   if (!match) {
-    throw new Error(`City "${city}" not found. Available: ${listWaterCities().join(", ")}`);
+    try {
+      const geo = await geoResolve(city);
+      match = { stateCode: geo.stateAbbrev.toLowerCase(), name: geo.city, lat: geo.lat, lon: geo.lon };
+    } catch {
+      // geo-resolver also failed
+    }
+  }
+
+  if (!match) {
+    throw new Error(`City "${city}" not found. Try a more specific city name (e.g., "Springfield, IL" instead of "Springfield").`);
   }
 
   // Create a bounding box ~25 miles around the city

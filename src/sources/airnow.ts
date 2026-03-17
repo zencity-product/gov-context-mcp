@@ -9,6 +9,8 @@
  * Set as AIRNOW_API_KEY environment variable.
  */
 
+import { resolveCity as geoResolve } from "./geo-resolver.js";
+
 const BASE_URL = "https://www.airnowapi.org/aq";
 
 // Zip codes for major cities (AirNow queries by zip)
@@ -149,10 +151,22 @@ export async function queryAirQuality(city: string): Promise<AirQualityResult> {
     throw new Error("AIRNOW_API_KEY not set. Get a free key at https://docs.airnowapi.org/account/request/");
   }
 
-  const match = resolveZip(city);
+  let match = resolveZip(city);
+
+  // Fallback: try geo-resolver for any US city
   if (!match) {
-    const available = [...new Set(Object.values(CITY_ZIPS).map(v => v.name))].sort().join(", ");
-    throw new Error(`City "${city}" not found. Available: ${available}. You can also pass a 5-digit ZIP code directly.`);
+    try {
+      const geo = await geoResolve(city);
+      if (geo.zip) {
+        match = { zip: geo.zip, name: geo.city };
+      }
+    } catch {
+      // geo-resolver also failed
+    }
+  }
+
+  if (!match) {
+    throw new Error(`City "${city}" not found. Any US city name or 5-digit ZIP code should work. If using a city name, make sure the spelling is correct.`);
   }
 
   // Fetch current observations and forecast in parallel

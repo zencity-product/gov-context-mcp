@@ -12,6 +12,8 @@
  * in a city's primary county.
  */
 
+import { resolveCity as geoResolve } from "./geo-resolver.js";
+
 const BASE_URL = "https://educationdata.urban.org/api/v1";
 const DATA_YEAR = 2022; // Most recent complete year (education data lags)
 
@@ -129,10 +131,26 @@ interface FinanceRecord {
 
 /**
  * Resolve a city name to its county mapping.
+ * Falls back to the shared geo-resolver for cities not in the hardcoded map.
  */
-function resolveCity(input: string): { name: string; stateFips: string; countyName: string } | null {
+async function resolveCity(input: string): Promise<{ name: string; stateFips: string; countyName: string } | null> {
   const normalized = input.toLowerCase().trim();
-  return CITY_COUNTIES[normalized] || null;
+  let match = CITY_COUNTIES[normalized] || null;
+
+  if (!match) {
+    try {
+      const geo = await geoResolve(input);
+      match = {
+        name: geo.city,
+        stateFips: geo.stateFips,
+        countyName: geo.countyName,
+      };
+    } catch {
+      // geo-resolver failed
+    }
+  }
+
+  return match;
 }
 
 /**
@@ -217,7 +235,7 @@ function safeSum(values: (number | null)[]): number {
  * Query school district data for a city.
  */
 export async function querySchools(city: string): Promise<SchoolResult> {
-  const cityInfo = resolveCity(city);
+  const cityInfo = await resolveCity(city);
   if (!cityInfo) {
     throw new Error(
       `City "${city}" not found. Use listSchoolCities() to see supported cities.`,

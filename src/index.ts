@@ -21,7 +21,7 @@ import { resolveCity, listCities } from "./cities.js";
 import { querySocrata, formatSocrataResults } from "./sources/socrata.js";
 import { queryCensus, formatCensusResults } from "./sources/census.js";
 import { resolveFredCity, listFredCities, queryFred, formatFredResults } from "./sources/fred.js";
-import { resolveFbiCity, listFbiCities, queryFbiCrime, formatFbiResults } from "./sources/fbi.js";
+import { resolveFbiCity, resolveFbiCityAsync, listFbiCities, queryFbiCrime, formatFbiResults } from "./sources/fbi.js";
 import { resolveBlsCity, listBlsCities, queryBls, formatBlsResults } from "./sources/bls.js";
 import { buildCohort, formatCohortResults, type CohortCriteria } from "./sources/cohort.js";
 import { buildFullCohort, formatFullCohortResults, type FullCohortCriteria } from "./sources/full-cohort.js";
@@ -402,14 +402,14 @@ No additional API key needed — reuses the Census API key.`,
       }),
     },
     async (args) => {
-      const match = resolveFbiCity(args.city);
+      const match = await resolveFbiCityAsync(args.city);
       if (!match) {
         const available = listFbiCities().map((c) => `${c.name} (${c.state})`).join(", ");
         return {
           content: [
             {
               type: "text" as const,
-              text: `City/state "${args.city}" not found. Available: ${available}`,
+              text: `City/state "${args.city}" not found. Could not geo-resolve to a US state. Try a more specific name (e.g., "Springfield, IL") or a state abbreviation (e.g., "TX").`,
             },
           ],
         };

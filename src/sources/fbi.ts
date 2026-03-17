@@ -32,6 +32,8 @@
  * Docs: https://crime-data-explorer.fr.cloud.gov/pages/docApi
  */
 
+import { resolveCity as geoResolve } from "./geo-resolver.js";
+
 const STATE_BASE_URL = "https://api.usa.gov/crime/fbi/sapi";
 const AGENCY_BASE_URL = "https://api.usa.gov/crime/fbi/cde";
 
@@ -237,6 +239,31 @@ export function resolveFbiCity(input: string): { key: string; config: typeof CIT
   }
 
   return null;
+}
+
+/**
+ * Async version of resolveFbiCity that falls back to the geo-resolver.
+ * If the city isn't in the hardcoded list, geo-resolve it to get the state,
+ * then return a config suitable for state-level FBI data.
+ */
+export async function resolveFbiCityAsync(
+  input: string
+): Promise<{ key: string; config: { name: string; state: string } } | null> {
+  // Try hardcoded first (instant, no network)
+  const hardcoded = resolveFbiCity(input);
+  if (hardcoded) return hardcoded;
+
+  // Fallback: use geo-resolver to determine the state
+  try {
+    const geo = await geoResolve(input);
+    if (!geo.stateAbbrev) return null;
+    return {
+      key: geo.city.toLowerCase().replace(/\s+/g, "_"),
+      config: { name: geo.city, state: geo.stateAbbrev },
+    };
+  } catch {
+    return null;
+  }
 }
 
 /**

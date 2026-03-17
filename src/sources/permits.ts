@@ -9,6 +9,8 @@
  * API key: Same CENSUS_API_KEY used for demographics.
  */
 
+import { resolveCity as geoResolve } from "./geo-resolver.js";
+
 const BPS_BASE = "https://api.census.gov/data/timeseries/bps";
 const TREND_YEARS = [2020, 2021, 2022, 2023, 2024];
 
@@ -120,13 +122,29 @@ export interface PermitResult {
 
 /**
  * Resolve a city name (or alias) to its FIPS entry.
+ * Falls back to the shared geo-resolver for cities not in the hardcoded map.
  */
-function resolveCity(input: string): { key: string; fips: CityFips } | null {
+async function resolveCity(input: string): Promise<{ key: string; fips: CityFips } | null> {
   const normalized = input.toLowerCase().trim();
   const key = ALIASES[normalized] ?? normalized;
   const fips = CITY_FIPS[key];
-  if (!fips) return null;
-  return { key, fips };
+  if (fips) return { key, fips };
+
+  // Fallback: try the shared geo-resolver
+  try {
+    const geo = await geoResolve(input);
+    return {
+      key: geo.city.toLowerCase().replace(/\s+/g, "_"),
+      fips: {
+        name: geo.city,
+        stateFips: geo.stateFips,
+        countyFips: geo.countyFips,
+      },
+    };
+  } catch {
+    // geo-resolver failed
+    return null;
+  }
 }
 
 /**
@@ -183,7 +201,7 @@ export async function queryPermits(city: string): Promise<PermitResult> {
     throw new Error("CENSUS_API_KEY not set.");
   }
 
-  const resolved = resolveCity(city);
+  const resolved = await resolveCity(city);
   if (!resolved) {
     const available = Object.values(CITY_FIPS)
       .map((f) => f.name)

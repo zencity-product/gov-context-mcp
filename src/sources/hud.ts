@@ -15,6 +15,8 @@
  * Docs: https://www.huduser.gov/portal/dataset/fmr-api.html
  */
 
+import { resolveCity as geoResolve } from "./geo-resolver.js";
+
 const FMR_BASE = "https://www.huduser.gov/hudapi/public/fmr/data";
 const IL_BASE = "https://www.huduser.gov/hudapi/public/il/data";
 
@@ -131,9 +133,21 @@ export function listHudCities(): string[] {
 }
 
 export async function queryHud(city: string): Promise<HudResult> {
-  const match = resolveCounty(city);
+  let match = resolveCounty(city);
   if (!match) {
-    throw new Error(`City "${city}" not found in HUD data. Available: ${listHudCities().join(", ")}`);
+    try {
+      const geo = await geoResolve(city);
+      match = {
+        fips: `${geo.stateFips}${geo.countyFips}99999`,
+        name: geo.city,
+        county: geo.countyName,
+      };
+    } catch {
+      // geo-resolver failed
+    }
+  }
+  if (!match) {
+    throw new Error(`City "${city}" not found in HUD data and geo-resolver could not resolve it.`);
   }
 
   // Extract state+county FIPS for the API
