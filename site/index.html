@@ -538,8 +538,10 @@
 <!-- ARCHITECTURE / DATA SOURCES -->
 <section id="architecture">
   <div class="section-label">Architecture</div>
-  <h2>15 data sources, one unified API</h2>
-  <p class="subtitle">Each source has its own client module. The geo-resolver makes 10 of them work for any US city dynamically.</p>
+  <h2>28 data sources across US &amp; UK, one unified API</h2>
+  <p class="subtitle">Each source has its own client module. Geo-resolvers handle dynamic city lookup for both US (~30K places) and UK (40+ cities + postcode fallback).</p>
+
+  <h3 style="margin-bottom: 1rem; font-size: 1rem; color: var(--text-dim);">🇺🇸 US Data Sources (15)</h3>
 
   <div style="overflow-x: auto;">
   <table class="source-table">
@@ -566,15 +568,40 @@
   </table>
   </div>
   <p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 1rem;">* Dynamic via geo-resolver: hardcoded fast-path + Census geocoder fallback for any US city</p>
+
+  <h3 style="margin: 2.5rem 0 1rem; font-size: 1rem; color: var(--text-dim);">🇬🇧 UK Data Sources (13)</h3>
+  <div style="overflow-x: auto;">
+  <table class="source-table">
+    <thead>
+      <tr><th>Source</th><th>Data</th><th>Key?</th><th>Coverage</th><th></th></tr>
+    </thead>
+    <tbody>
+      <tr><td><strong>ONS Census 2021</strong></td><td>Population, deprivation, earnings (via Nomis)</td><td>No</td><td>All UK LAs</td><td><span class="coverage-bar coverage-any" style="width:100%"></span></td></tr>
+      <tr><td><strong>Police UK</strong></td><td>Street-level crime by category</td><td>No</td><td>England, Wales, NI</td><td><span class="coverage-bar coverage-any" style="width:90%"></span></td></tr>
+      <tr><td><strong>HM Land Registry</strong></td><td>Property transactions, average prices (SPARQL)</td><td>No</td><td>England &amp; Wales</td><td><span class="coverage-bar coverage-any" style="width:85%"></span></td></tr>
+      <tr><td><strong>Nomis ASHE</strong></td><td>Median earnings by local authority</td><td>No</td><td>All English LAs</td><td><span class="coverage-bar coverage-any" style="width:85%"></span></td></tr>
+      <tr><td><strong>Environment Agency</strong></td><td>River levels, flood warnings, real-time monitoring</td><td>No</td><td>England</td><td><span class="coverage-bar" style="width:50%"></span></td></tr>
+      <tr><td><strong>DEFRA UK-AIR</strong></td><td>Air quality index (DAQI), PM2.5, NO2</td><td>No</td><td>~150 stations</td><td><span class="coverage-bar" style="width:50%"></span></td></tr>
+      <tr><td><strong>Planning Data</strong></td><td>Planning applications, decisions</td><td>No</td><td>England</td><td><span class="coverage-bar" style="width:50%"></span></td></tr>
+      <tr><td><strong>GIAS / DfE</strong></td><td>Schools, Ofsted ratings, attainment</td><td>No</td><td>England</td><td><span class="coverage-bar" style="width:50%"></span></td></tr>
+      <tr><td><strong>MHCLG</strong></td><td>Local gov finance, council tax, spending</td><td>No</td><td>English LAs</td><td><span class="coverage-bar" style="width:50%"></span></td></tr>
+      <tr><td><strong>data.gov.uk</strong></td><td>Open data catalogue search (CKAN)</td><td>No</td><td>All UK</td><td><span class="coverage-bar coverage-any" style="width:100%"></span></td></tr>
+      <tr><td><strong>Met Office</strong></td><td>Weather, 5-day forecast</td><td>Yes</td><td>All UK</td><td><span class="coverage-bar coverage-any" style="width:100%"></span></td></tr>
+      <tr><td><strong>TfL / BODS</strong></td><td>Transport status, bus data</td><td>Yes</td><td>London + England</td><td><span class="coverage-bar" style="width:50%"></span></td></tr>
+      <tr><td><strong>TheyWorkForYou</strong></td><td>MPs, councillors, voting record</td><td>Yes</td><td>All UK</td><td><span class="coverage-bar coverage-any" style="width:100%"></span></td></tr>
+    </tbody>
+  </table>
+  </div>
+  <p style="font-size: 0.8rem; color: var(--text-dim); margin-top: 1rem;">UK geo-resolver: 40-city registry with LAD codes + MapIt API fallback for postcodes. 10 of 13 sources require no API key.</p>
 </section>
 
 <!-- TOOLS -->
 <section id="tools">
-  <div class="section-label">22 Tools</div>
+  <div class="section-label">37 Tools</div>
   <h2>What Claude can do with this</h2>
   <p class="subtitle">Data tools fetch information. Analysis tools combine multiple sources into insights. Both types are designed to be composed — Claude chains them naturally.</p>
 
-  <h3 style="margin-bottom: 1rem; font-size: 1rem; color: var(--text-dim);">Data Tools</h3>
+  <h3 style="margin-bottom: 1rem; font-size: 1rem; color: var(--text-dim);">🇺🇸 US Data Tools</h3>
   <div class="cards">
     <div class="card"><span class="badge badge-green">Any City</span><h3>query_demographics</h3><p>Census population, income, poverty, education, housing, commuting</p></div>
     <div class="card"><span class="badge badge-green">Any City</span><h3>query_weather</h3><p>NWS conditions, forecast, active alerts</p></div>
@@ -595,7 +622,7 @@
     <div class="card"><h3>list_available_data</h3><p>Discovery: what data exists for which cities</p></div>
   </div>
 
-  <h3 style="margin: 2.5rem 0 1rem; font-size: 1rem; color: var(--text-dim);">Analysis Tools</h3>
+  <h3 style="margin: 2.5rem 0 1rem; font-size: 1rem; color: var(--text-dim);">🇺🇸 US Analysis Tools</h3>
   <div class="cards">
     <div class="card" style="border-color: var(--accent);">
       <span class="badge badge-rose">Multi-Source</span>
@@ -621,6 +648,29 @@
       <span class="badge badge-rose">Fast Peers</span>
       <h3>create_census_cohort</h3>
       <p>Quick demographic peer matching. 75-city pool, 7 criteria presets. Census-only — fast results.</p>
+    </div>
+  </div>
+
+  <h3 style="margin: 2.5rem 0 1rem; font-size: 1rem; color: var(--text-dim);">🇬🇧 UK Data Tools</h3>
+  <div class="cards">
+    <div class="card"><span class="badge badge-green">Any UK City</span><h3>query_uk_demographics</h3><p>ONS Census 2021 population, deprivation, median earnings</p></div>
+    <div class="card"><span class="badge badge-green">Any UK City</span><h3>query_uk_crime</h3><p>Police UK street-level crime by category</p></div>
+    <div class="card"><span class="badge badge-green">Any UK City</span><h3>query_uk_housing</h3><p>Land Registry transactions, average prices</p></div>
+    <div class="card"><span class="badge badge-green">Any UK City</span><h3>query_uk_economics</h3><p>Nomis earnings + Bank of England indicators</p></div>
+    <div class="card"><span class="badge badge-green">England</span><h3>query_uk_flood_water</h3><p>Environment Agency river levels, flood warnings</p></div>
+    <div class="card"><span class="badge badge-green">Any UK City</span><h3>query_uk_air_quality</h3><p>DEFRA DAQI index, PM2.5, NO2 readings</p></div>
+    <div class="card"><span class="badge badge-green">England</span><h3>query_uk_planning</h3><p>Planning applications and decisions</p></div>
+    <div class="card"><span class="badge badge-green">England</span><h3>query_uk_schools</h3><p>GIAS school data, Ofsted ratings, attainment</p></div>
+    <div class="card"><span class="badge badge-green">England</span><h3>query_uk_budget</h3><p>MHCLG local gov finance, council tax</p></div>
+    <div class="card"><span class="badge badge-green">All UK</span><h3>search_uk_datasets</h3><p>Search data.gov.uk open data catalogue</p></div>
+    <div class="card"><span class="badge badge-green">Any UK City</span><h3>query_uk_migration</h3><p>ONS internal migration estimates</p></div>
+    <div class="card"><span class="badge badge-blue">Needs Key</span><h3>query_uk_weather</h3><p>Met Office 5-day forecast + current conditions</p></div>
+    <div class="card"><span class="badge badge-blue">Needs Key</span><h3>query_uk_transport</h3><p>TfL tube/bus status + BODS national bus data</p></div>
+    <div class="card"><span class="badge badge-blue">Needs Key</span><h3>query_uk_representatives</h3><p>TheyWorkForYou MPs, councillors, voting record</p></div>
+    <div class="card" style="border-color: var(--accent);">
+      <span class="badge badge-rose">Multi-Source</span>
+      <h3>create_uk_city_briefing</h3>
+      <p>Pulls 9+ UK sources in parallel. Returns a structured executive brief covering demographics, economics, housing, crime, environment, education, planning, and governance.</p>
     </div>
   </div>
 </section>
@@ -653,6 +703,12 @@ npm install && npm run build</div>
         <div class="key-card"><strong>FRED API <span class="tag tag-required">Required</span></strong>Economics, unemployment, housing index<br><a href="https://fred.stlouisfed.org/docs/api/api_key.html" target="_blank">Get key &rarr;</a></div>
         <div class="key-card"><strong>AirNow API <span class="tag tag-optional">Optional</span></strong>Air quality index & forecasts<br><a href="https://docs.airnowapi.org/account/request/" target="_blank">Get key &rarr;</a></div>
         <div class="key-card"><strong>Google Civic <span class="tag tag-optional">Optional</span></strong>Elected representatives<br><a href="https://console.cloud.google.com/apis/credentials" target="_blank">Get key &rarr;</a></div>
+      </div>
+      <p style="margin-top: 1rem; font-size: 0.85rem; color: var(--text-dim);"><strong>UK sources</strong> — 10 of 13 UK tools work without keys. Optional keys for weather, transport, and representatives:</p>
+      <div class="key-grid">
+        <div class="key-card"><strong>Met Office <span class="tag tag-optional">Optional</span></strong>UK weather &amp; forecast<br><a href="https://www.metoffice.gov.uk/services/data/datapoint" target="_blank">Get key &rarr;</a></div>
+        <div class="key-card"><strong>TfL API <span class="tag tag-optional">Optional</span></strong>London transport status<br><a href="https://api-portal.tfl.gov.uk/" target="_blank">Get key &rarr;</a></div>
+        <div class="key-card"><strong>TheyWorkForYou <span class="tag tag-optional">Optional</span></strong>UK MPs &amp; councillors<br><a href="https://www.theyworkforyou.com/api/key" target="_blank">Get key &rarr;</a></div>
       </div>
     </div>
 
